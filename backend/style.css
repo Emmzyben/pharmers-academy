@@ -1,0 +1,47 @@
+.notification-bar {
+    padding: 10px;
+    text-align: center;
+    z-index: 1050;
+    display: none;
+    position: fixed;
+    right: -100%; /* Start off-screen */
+    top: 20px;
+    width: 300px;
+    animation: slideIn 0.5s forwards;border-radius: 7px;
+}
+
+.notification-success {
+    background-color: green;
+    color: #ffffff;
+    margin: 15px;
+}
+
+.notification-error {
+    background-color: orangered;
+    color: #ffffff;
+    margin: 15px;
+}
+
+.close-btn {
+    margin-left: 15px;
+    color: #000;
+    font-weight: bold;
+    float: right;
+    font-size: 20px;
+    line-height: 20px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.close-btn:hover {
+    color: #999;
+}
+
+@keyframes slideIn {
+    from {
+        right: -100%;
+    }
+    to {
+        right: 20px;
+    }
+}
