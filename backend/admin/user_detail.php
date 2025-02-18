@@ -22,83 +22,118 @@ if (!$user) {
 $stmt->close();
 
 
-$message = "";
-$messageType = "";
-$courseId = intval($_GET['id']); 
+// Enable error reporting for debugging
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
-// Fetch all modules for the dropdown
-$modules = [];
-$queryModules = "SELECT id, module_title FROM modules WHERE course_id = ?";
-$stmt = $conn->prepare($queryModules);
-$stmt->bind_param("i", $courseId);
-$stmt->execute();
-$resultModules = $stmt->get_result();
+$message = '';
+$messageType = '';
 
-if ($resultModules->num_rows > 0) {
-    while ($row = $resultModules->fetch_assoc()) {
-        $modules[] = $row;
+// Fetch student and user details
+$id = $_GET['id'] ?? 0;
+$admin = [];
+$admin2 = [];
+
+if ($id) {
+  
+
+    // Fetch user details
+    $stmt = $conn->prepare("SELECT id, username, email, password, profile_picture FROM users WHERE id=?");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    $stmt->store_result();
+
+    if ($stmt->num_rows === 1) {
+        $stmt->bind_result($admin2_id, $admin2_username, $admin2_email, $admin2_password, $admin2_profile_picture);
+        $stmt->fetch();
+        $admin2 = [
+            'id' => $admin2_id,
+            'username' => $admin2_username,
+            'password' => $admin2_password,
+            'email' => $admin2_email,
+            'profile_picture' => $admin2_profile_picture
+        ];
+    }
+    $stmt->close();
+}
+
+// Handle form submission
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+
+    $email = $_POST['email'] ?? '';
+    $username = $_POST['username'] ?? '';
+    $password = $_POST['password'] ?? '';
+
+    // Check if username already exists for a different user
+    $stmt = $conn->prepare("SELECT id FROM users WHERE username = ? AND id != ?");
+    $stmt->bind_param("si", $username, $id);
+    $stmt->execute();
+    $stmt->store_result();
+
+    if ($stmt->num_rows > 0) {
+        setSessionMessage("Username already exists.", "error");
+        $stmt->close();
+        header("Location: user_detail.php?id=$id");
+        exit();
+    }
+    $stmt->close();
+
+    $profilePicturePath = null;
+
+    // Handle file upload
+    if (isset($_FILES['profile_picture']) && $_FILES['profile_picture']['error'] == 0) {
+        $uploadDir = '../../img';
+        $fileTmpPath = $_FILES['profile_picture']['tmp_name'];
+        $fileName = $_FILES['profile_picture']['name'];
+        $fileExtension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+        $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif'];
+
+        // Validate file extension
+        if (!in_array($fileExtension, $allowedExtensions)) {
+            setSessionMessage("Invalid file type. Only JPG, JPEG, PNG, and GIF are allowed.", "error");
+            header("Location: user_detail.php");
+            exit();
+        }
+
+        // Create a unique file name and move the file
+        $uniqueFileName = uniqid() . '.' . $fileExtension;
+        $profilePicturePath = $uploadDir . $uniqueFileName;
+
+        if (!move_uploaded_file($fileTmpPath, $profilePicturePath)) {
+            setSessionMessage("Failed to upload the profile picture.", "error");
+            header("Location: user_detail.php");
+            exit();
+        }
+    }
+
+ 
+
+    // Update user details
+    if (!empty($password)) {
+        $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+        $stmt = $conn->prepare("UPDATE users SET username=?, password=?, email=?, profile_picture=? WHERE id=?");
+        $stmt->bind_param("ssssi", $username, $hashedPassword, $email, $profilePicturePath, $id);
+    } else {
+        $stmt = $conn->prepare("UPDATE users SET username=?, email=?, profile_picture=? WHERE id=?");
+        $stmt->bind_param("sssi", $username, $email, $profilePicturePath, $id);
+    }
+
+    if ($stmt->execute()) {
+        setSessionMessage("user record updated successfully.", "success");
+        $stmt->close();
+        header("Location: settings.php");
+        exit();
+    } else {
+        setSessionMessage("Error updating user record: " . $stmt->error, "error");
+        $stmt->close();
+        header("Location: user_detail.php?id=$id");
+        exit();
     }
 }
 
-if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    $moduleId = $_POST['moduleId'] ?? '';
-    $contentType = $_POST['contentType'] ?? '';
-    $contentData = '';
-
-    if (!empty($moduleId) && !empty($contentType)) {
-        if ($contentType === "video file" || $contentType === "Pdf") {
-            // Handle file upload
-            if (isset($_FILES['contentFile']) && $_FILES['contentFile']['error'] === UPLOAD_ERR_OK) {
-                $fileTmpPath = $_FILES['contentFile']['tmp_name'];
-                $fileName = basename($_FILES['contentFile']['name']);
-                $uploadDir = '../../img'; // Ensure this directory exists and is writable
-                $destinationPath = $uploadDir . $fileName;
-
-                if (move_uploaded_file($fileTmpPath, $destinationPath)) {
-                    $contentData = $destinationPath; // Store file path in database
-                } else {
-                    $message = "Error uploading file.";
-                    $messageType = "error";
-                }
-            } else {
-                $message = "No file uploaded.";
-                $messageType = "error";
-            }
-        } elseif ($contentType === "video link") {
-            // Handle URL input
-            $contentData = htmlspecialchars(trim($_POST['contentLink'] ?? ''));
-        }
-
-        if (!empty($contentData)) {
-            // Insert content into database
-            $queryContent = "INSERT INTO contents (module_id, content_type, content_data) VALUES (?, ?, ?)";
-            $stmtContent = $conn->prepare($queryContent);
-
-            if ($stmtContent) {
-                $stmtContent->bind_param("iss", $moduleId, $contentType, $contentData);
-
-                if ($stmtContent->execute()) {
-                    $message = "Content added successfully!";
-                    $messageType = "success";
-                } else {
-                    $message = "Error inserting content: " . $stmtContent->error;
-                    $messageType = "error";
-                }
-                $stmtContent->close();
-            } else {
-                $message = "Error preparing content query: " . $conn->error;
-                $messageType = "error";
-            }
-        }
-    } else {
-        $message = "Invalid input data. Please fill out all fields.";
-        $messageType = "error";
-    }
-
+// Function to handle session messages
+function setSessionMessage($message, $messageType) {
     $_SESSION['message'] = $message;
     $_SESSION['messageType'] = $messageType;
-    header("Location:  enter_content.php?id=$courseId");
-    exit;
 }
 
 if (isset($_SESSION['message'])) {
@@ -116,7 +151,7 @@ if (isset($_SESSION['message'])) {
   <!-- Required meta tags -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  <title>Add Content</title>
+  <title>user details</title>
   <!-- plugins:css -->
   <link rel="stylesheet" href="vendors/feather/feather.css">
   <link rel="stylesheet" href="vendors/ti-icons/css/themify-icons.css">
@@ -246,8 +281,7 @@ if (isset($_SESSION['message'])) {
       </nav>
       <!-- partial -->
       <div class="main-panel">
-        <div class="content-wrapper">
-        <?php
+      <?php
                     if (!empty($message)) {
                         echo '<div id="notificationBar" class="notification-bar notification-' . $messageType . '">';
                         echo $message;
@@ -255,12 +289,13 @@ if (isset($_SESSION['message'])) {
                         echo '</div>';
                     }
                 ?>
+        <div class="content-wrapper">
           <div class="row">
             <div class="col-md-12 grid-margin">
               <div class="row">
                 <div class="col-12 col-xl-8 mb-4 mb-xl-0">
-                  <h3 class="font-weight-bold">Add Content</h3>
-                  <h6 class="font-weight-normal mb-0">add course and module content</h6>
+                  <h3 class="font-weight-bold">User details</h3>
+                  <h6 class="font-weight-normal mb-0">View/edit User details</h6>
                 </div>
                
               </div>
@@ -269,59 +304,109 @@ if (isset($_SESSION['message'])) {
           
        
           <div class="col-12 grid-margin">
-          <form action="" method="POST" enctype="multipart/form-data" class="forms-sample">
-    <div class="card">
-        <div class="card-body">
-            <div class="form-group">
-                <label for="courseName">Module</label>
-                <select name="moduleId" class="form-control">
-                    <option value="">Select Module</option>
-                    <?php foreach ($modules as $module) : ?>
-                        <option value="<?= $module['id'] ?>"><?= $module['module_title'] ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="contentType">Content type</label>
-                <select name="contentType" class="form-control" id="contentType">
-                    <option value="">Select option</option>
-                    <option value="video file">Video</option>
-                    <option value="Pdf">PDF file</option>
-                    <option value="video link">Video Link</option>
-                </select>
-            </div>
+              <div class="card">
+                <div class="card-body">
+                  <form class="form-sample">
+                    
+                    <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group row">
+                          <div class="col-sm-9">
+                          <?php if (!empty($admin2['profile_picture'])): ?>
+        <img src="../profileImage/<?= htmlspecialchars($admin2['profile_picture']) ?>" alt="Profile Picture" width="200px" style="border-radius:10px">
+    <?php else: ?>
+      <img src="img/carousel-1.jpg" alt="" width="200px" style="border-radius:10px">
+    <?php endif; ?>
+                          </div>
+                        </div>
+                      </div>
 
-            <div class="form-group" id="fileUploadGroup" style="display:none;">
-                <label for="contentFile">Upload File</label>
-                <input type="file" name="contentFile" class="form-control">
-            </div>
+                     
 
-            <div class="form-group" id="linkInputGroup" style="display:none;">
-                <label for="contentLink">Video Link</label>
-                <input type="text" name="contentLink" class="form-control">
+
+
+
+
+                    </div>
+                    
+                  </form>
+                 
+                </div>
+              </div>
+              <br>
+              <div class="card">
+                <div class="card-body">
+                <form method="post" action="" enctype="multipart/form-data">
+  
+    <div class="row">
+        <div class="col-md-6">
+            <div class="form-group row">
+                <label class="col-sm-3 col-form-label">Username</label>
+                <div class="col-sm-9">
+                    <input type="text" name='username' class="form-control" value="<?php echo htmlspecialchars($admin2['username']); ?>">
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="form-group row">
+                <label class="col-sm-3 col-form-label">Email</label>
+                <div class="col-sm-9">
+                    <input type="text" name='email' class="form-control" value="<?php echo htmlspecialchars($admin2['email']); ?>">
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="form-group row">
+                <label class="col-sm-3 col-form-label">Password</label>
+                <div class="col-sm-9">
+                    <input type="text" name='password' class="form-control" value="">
+                </div>
             </div>
         </div>
     </div>
 
-    <br>
-    <div class="card">
-        <div class="card-body">
-            <button type="submit" class="btn btn-primary mr-2">Post</button>
+    <div class="col-md-6">
+        <div class="form-group row">
+            <label class="col-sm-3 col-form-label">Change Profile Picture</label>
+            <div class="col-sm-9">
+                <input type="file" name="profile_picture" class="form-control" id="profile_picture">
+            </div>
+            <div>
+                <!-- Image preview -->
+                <img id="img-preview" src="#" alt="Image Preview" style="max-width: 200px; display: none;max-height:150px">
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="form-group row">
+            <div class="col-sm-9">
+                <button type="submit" class="btn btn-primary mr-2">Update Details</button>
+                <button class="btn btn-danger mr-2">Delete student</button>
+            </div>
         </div>
     </div>
 </form>
 
-<script>
-document.getElementById("contentType").addEventListener("change", function() {
-    var selectedType = this.value;
-    document.getElementById("fileUploadGroup").style.display = selectedType === "video file" || selectedType === "Pdf" ? "block" : "none";
-    document.getElementById("linkInputGroup").style.display = selectedType === "video link" ? "block" : "none";
-});
-</script>
-
-
+                 
+                </div>
+              </div>
             </div>
-          
+            <script>
+  document.getElementById('profile_picture').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        const imgPreview = document.getElementById('img-preview');
+        imgPreview.src = event.target.result;
+        imgPreview.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+</script>
+         
         <!-- content-wrapper ends -->
         <!-- partial:partials/_footer.php -->
         <footer class="footer">

@@ -1,3 +1,91 @@
+<?php 
+session_start();
+// Check if the user is logged in
+if (!isset($_SESSION['user_id'])) {
+  header("Location: logout.php"); 
+  exit;
+}
+
+
+include '../database/db_config.php'; 
+$userId = $_SESSION['user_id'];
+$query = "SELECT * FROM users WHERE id = ?";
+$stmt = $conn->prepare($query);
+$stmt->bind_param("i", $userId);
+$stmt->execute();
+$result = $stmt->get_result();
+$user = $result->fetch_assoc();
+
+if (!$user) {
+    $message = "User not found.";
+    $messageType = "error";
+}
+$stmt->close();
+
+
+// Get total number of users
+$userQuery = "SELECT COUNT(*) AS total_users FROM users";
+$userResult = $conn->query($userQuery);
+$totalUsers = $userResult->fetch_assoc()['total_users'];
+
+// Get total number of students
+$studentQuery = "SELECT COUNT(*) AS total_students FROM users WHERE role = 'student'";
+$studentResult = $conn->query($studentQuery);
+$totalStudents = $studentResult->fetch_assoc()['total_students'];
+
+// Get total number of instructors
+$instructorQuery = "SELECT COUNT(*) AS total_instructors FROM users WHERE role = 'instructor'";
+$instructorResult = $conn->query($instructorQuery);
+$totalInstructors = $instructorResult->fetch_assoc()['total_instructors'];
+
+// Get total number of courses
+$courseQuery = "SELECT COUNT(*) AS total_courses FROM courses";
+$courseResult = $conn->query($courseQuery);
+$totalCourses = $courseResult->fetch_assoc()['total_courses'];
+
+// Fetch all courses and their enrolled student count
+$coursesQuery = "SELECT id, course_name FROM courses";
+$coursesResult = $conn->query($coursesQuery);
+
+$courses = [];
+while ($course = $coursesResult->fetch_assoc()) {
+    $courseId = $course['id'];
+
+    // Count students enrolled in this course
+    $enrollmentQuery = "SELECT COUNT(*) AS student_count FROM user_courses WHERE course_id = $courseId";
+    $enrollmentResult = $conn->query($enrollmentQuery);
+    $studentCount = $enrollmentResult->fetch_assoc()['student_count'];
+
+    // Store course data with student count
+    $courses[] = [
+        'id' => $courseId,
+        'name' => $course['course_name'],
+        'students_enrolled' => $studentCount
+    ];
+}
+
+$enrolledQuery = "
+    SELECT s.firstName, s.lastName, s.enrolment_number, s.created_at, c.course_name
+    FROM students s
+    JOIN user_courses uc ON s.id = uc.user_id
+    JOIN courses c ON uc.course_id = c.id
+    ORDER BY s.created_at DESC
+    LIMIT 10";  // Fetch the most recent 10 enrollments
+
+$enrolledResult = $conn->query($enrolledQuery);
+
+$enrolledStudents = [];
+while ($row = $enrolledResult->fetch_assoc()) {
+    $enrolledStudents[] = $row;
+}
+if (isset($_SESSION['message'])) {
+  $message = $_SESSION['message'];
+  $messageType = $_SESSION['messageType'];
+  unset($_SESSION['message']);
+  unset($_SESSION['messageType']);
+}
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 
@@ -20,14 +108,15 @@
   <link rel="stylesheet" href="css/vertical-layout-light/style.css">
   <!-- endinject -->
   <link rel="shortcut icon" href="img/logo.jpg" />
+  <link rel="stylesheet" href="../style.css">
 </head>
 <body>
   <div class="container-scroller">
-    <!-- partial:partials/_navbar.html -->
+    <!-- partial:partials/_navbar.php -->
     <nav class="navbar col-lg-12 col-12 p-0 fixed-top d-flex flex-row">
       <div class="text-center navbar-brand-wrapper d-flex align-items-center justify-content-center">
-        <a class="navbar-brand brand-logo mr-5" href="index.html"><img src="img/logo.jpg" class="mr-2" alt="logo"/></a>
-        <a class="navbar-brand brand-logo-mini" href="index.html"><img src="img/logo.jpg"  alt="logo" style="width:400px"/></a>
+        <a class="navbar-brand brand-logo mr-5" href="index.php"><img src="img/logo.jpg" class="mr-2" alt="logo"/></a>
+        <a class="navbar-brand brand-logo-mini" href="index.php"><img src="img/logo.jpg"  alt="logo" style="width:400px"/></a>
       </div>
       <div class="navbar-menu-wrapper d-flex align-items-center justify-content-end">
         <button class="navbar-toggler navbar-toggler align-self-center" type="button" data-toggle="minimize">
@@ -40,10 +129,10 @@
           
           <li class="nav-item nav-profile dropdown">
             <a class="nav-link dropdown-toggle" href="#" data-toggle="dropdown" id="profileDropdown">
-              <img src="images/faces/face28.jpg" alt="profile"/>
+            <img src="<?php echo htmlspecialchars($user['profile_picture']); ?>" alt="image">
             </a>
             <div class="dropdown-menu dropdown-menu-right navbar-dropdown" aria-labelledby="profileDropdown">
-              <a class="dropdown-item">
+              <a class="dropdown-item" href="settings.php">
                 <i class="ti-settings text-primary"></i>
                 Settings
               </a>
@@ -62,7 +151,7 @@
     </nav>
     <!-- partial -->
     <div class="container-fluid page-body-wrapper">
-      <!-- partial:partials/_settings-panel.html -->
+      <!-- partial:partials/_settings-panel.php -->
       <div class="theme-setting-wrapper">
         <div id="settings-trigger"><i class="ti-settings"></i></div>
         <div id="theme-settings" class="settings-panel">
@@ -83,7 +172,7 @@
       </div>
     
       <!-- partial -->
-      <!-- partial:partials/_sidebar.html -->
+      <!-- partial:partials/_sidebar.php -->
       <nav class="sidebar sidebar-offcanvas" id="sidebar">
         <ul class="nav">
           <li class="nav-item">
@@ -134,6 +223,14 @@
       </nav>
       <!-- partial -->
       <div class="main-panel">
+      <?php
+                    if (!empty($message)) {
+                        echo '<div id="notificationBar" class="notification-bar notification-' . $messageType . '">';
+                        echo $message;
+                        echo '<span class="close-btn" onclick="closeNotification()">&times;</span>';
+                        echo '</div>';
+                    }
+                ?>
         <div class="content-wrapper">
           <div class="row">
             <div class="col-md-12 grid-margin">
@@ -144,11 +241,11 @@
                 </div>
                 <div class="col-12 col-xl-4">
                  <div class="justify-content-end d-flex">
-                  <div class="dropdown flex-md-grow-1 flex-xl-grow-0">
-                    <button class="btn btn-sm btn-light bg-white dropdown-toggle" type="button" id="dropdownMenuDate2" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
-                     <i class="mdi mdi-calendar"></i> Today (10 Jan 2021)
-                    </button>
-                  </div>
+                 <div class="flex-md-grow-1 flex-xl-grow-0">
+    <button class="btn btn-sm btn-light bg-white">
+        <i class="mdi mdi-calendar"></i> Today (<span id="currentDate"></span>)
+    </button>
+</div>
                  </div>
                 </div>
               </div>
@@ -162,7 +259,7 @@
                   <div class="card card-tale">
                     <div class="card-body">
                       <p class="mb-4">Total No of Users</p>
-                      <p class="fs-30 mb-2">4006</p>
+                      <p class="fs-30 mb-2"> <?= $totalUsers; ?></p>
                     </div>
                   </div>
                 </div>
@@ -170,7 +267,7 @@
                   <div class="card card-dark-blue">
                     <div class="card-body">
                       <p class="mb-4">Total Students</p>
-                      <p class="fs-30 mb-2">3600</p>
+                      <p class="fs-30 mb-2"> <?= $totalStudents; ?></p>
                     </div>
                   </div>
                 </div>
@@ -180,7 +277,7 @@
                   <div class="card card-light-blue">
                     <div class="card-body">
                       <p class="mb-4">No of Instructors</p>
-                      <p class="fs-30 mb-2">30</p>
+                      <p class="fs-30 mb-2"> <?= $totalInstructors; ?></p>
                     </div>
                   </div>
                 </div>
@@ -188,7 +285,7 @@
                   <div class="card card-light-danger">
                     <div class="card-body">
                       <p class="mb-4">No of Courses</p>
-                      <p class="fs-30 mb-2">47</p>
+                      <p class="fs-30 mb-2"><?= $totalCourses; ?></p>
                     </div>
                   </div>
                 </div>
@@ -196,95 +293,27 @@
             </div>
           </div>
        
-          <div class="row">
-            <div class="col-md-12 stretch-card grid-margin">
-              <div class="card">
-                <div class="card-body">
-                  <p class="card-title mb-0">Course information</p>
-                  <div class="table-responsive">
-                    <table class="table table-borderless">
-                      <thead>
-                        <tr>
-                          <th class="pl-0  pb-2 border-bottom">Course</th>
-                          <th class="border-bottom pb-2">Instructor</th>
-                          <th class="border-bottom pb-2">No of students enrolled</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td class="pl-0">Masterclass 105 – Quality Assurance Fundamentals</td>
-                          <td><p class="mb-0">Emmanuel Amadi</p></td>
-                          <td class="text-muted">65</td>
-                        </tr>
-                        <tr>
-                          <td class="pl-0">Masterclass 105 – Quality Assurance Fundamentals</td>
-                          <td><p class="mb-0">Emmanuel Amadi</p></td>
-                          <td class="text-muted">51</td>
-                        </tr>
-                        <tr>
-                          <td class="pl-0">Masterclass 105 – Quality Assurance Fundamentals</td>
-                          <td><p class="mb-0">Emmanuel Amadi</p></td>
-                          <td class="text-muted">32</td>
-                        </tr>
-                        <tr>
-                          <td class="pl-0">Masterclass 105 – Quality Assurance Fundamentals</td>
-                          <td><p class="mb-0">Emmanuel Amadi</p></td>
-                          <td class="text-muted">15</td>
-                        </tr>
-                        <tr>
-                          <td class="pl-0">Masterclass 105 – Quality Assurance Fundamentals</td>
-                          <td><p class="mb-0">Emmanuel Amadi</p></td>
-                          <td class="text-muted">25</td>
-                        </tr>
-                      
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </div>
-    </div>
+        
           <div class="row">
             <div class="col-md-12 grid-margin stretch-card">
               <div class="card">
                 <div class="card-body">
-                  <p class="card-title mb-0">Top Courses</p>
+                  <p class="card-title mb-0">Courses Enrolment</p>
                   <div class="table-responsive">
                     <table class="table table-striped table-borderless">
                       <thead>
                         <tr>
                           <th>Course</th>
-                          <th>Price</th>
                           <th>No of students</th>
                         </tr>  
                       </thead>
                       <tbody>
+                      <?php foreach ($courses as $course): ?>
                         <tr>
-                          <td>Masterclass 105 – Quality Assurance Fundamentals</td>
-                          <td class="font-weight-bold">Rs362</td>
-                          <td>20</td>
+                          <td><?= $course['name']; ?></td>
+                          <td><?= $course['students_enrolled']; ?></td>
                         </tr>
-                        <tr>
-                          <td>Masterclass 105 – Quality Assurance Fundamentals</td>
-                          <td class="font-weight-bold">Rs362</td>
-                          <td>20</td>
-                        </tr>
-                        <tr>
-                          <td>Masterclass 105 – Quality Assurance Fundamentals</td>
-                          <td class="font-weight-bold">Rs362</td>
-                          <td>20</td>
-                        </tr>
-                        <tr>
-                          <td>Masterclass 105 – Quality Assurance Fundamentals</td>
-                          <td class="font-weight-bold">Rs362</td>
-                          <td>20</td>
-                        </tr>
-                        <tr>
-                          <td>Masterclass 105 – Quality Assurance Fundamentals</td>
-                          <td class="font-weight-bold">Rs362</td>
-                          <td>20</td>
-                        </tr>
-                     
+                        <?php endforeach; ?>
                       </tbody>
                     </table>
                   </div>
@@ -295,61 +324,42 @@
           </div>
       
           <div class="row">
-            <div class="col-md-12 grid-margin stretch-card">
-              <div class="card">
-                <div class="card-body">
-                  <p class="card-title">Recently enrolled students</p>
-                  <div class="row">
+    <div class="col-md-12 grid-margin stretch-card">
+        <div class="card">
+            <div class="card-body">
+                <p class="card-title">Recently Enrolled Students</p>
+                <div class="row">
                     <div class="col-12">
-                      <div class="table-responsive">
-                        <table id="example" class="display expandable-table" style="width:100%">
-                          <thead>
-                            <tr>
-                              <th>Student name</th>
-                              <th>Admission number</th>
-                              <th>Course enrolled</th>
-                              <th>Registration date</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                        <tr>
-                          <td>Emmzy ben</td>
-                          <td class="font-weight-bold">PHA-234567</td>
-                          <td>Masterclass 105 – Quality Assurance Fundamentals</td>
-                          <td>21 Sep 2018</td>
-                      </tr>
-                      <tr>
-                          <td>Emmzy ben</td>
-                          <td class="font-weight-bold">PHA-234567</td>
-                          <td>Masterclass 105 – Quality Assurance Fundamentals</td>
-                          <td>21 Sep 2018</td>
-                      </tr>
-                      <tr>
-                          <td>Emmzy ben</td>
-                          <td class="font-weight-bold">PHA-234567</td>
-                          <td>Masterclass 105 – Quality Assurance Fundamentals</td>
-                          <td>21 Sep 2018</td>
-                      </tr>
-                      <tr>
-                          <td>Emmzy ben</td>
-                          <td class="font-weight-bold">PHA-234567</td>
-                          <td>Masterclass 105 – Quality Assurance Fundamentals</td>
-                          <td>21 Sep 2018</td>
-                      </tr>
-                      </tbody>
-                      </table>
-                      </div>
+                        <div class="table-responsive">
+                            <table id="example" class="display expandable-table" style="width:100%">
+                                <thead>
+                                    <tr>
+                                        <th>Student Name</th>
+                                        <th>Admission Number</th>
+                                        <th>Course Enrolled</th>
+                                        <th>Enrollment Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($enrolledStudents as $student): ?>
+                                        <tr>
+                                            <td><?= htmlspecialchars($student['firstName'] . ' ' . $student['lastName']); ?></td>
+                                            <td class="font-weight-bold"><?= htmlspecialchars($student['enrolment_number']); ?></td>
+                                            <td><?= htmlspecialchars($student['course_name']); ?></td>
+                                            <td><?= date("d M Y", strtotime($student['created_at'])); ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                  </div>
-                  </div>
                 </div>
-
-                
-              </div>
             </div>
         </div>
+    </div>
+</div>
         <!-- content-wrapper ends -->
-        <!-- partial:partials/_footer.html -->
+        <!-- partial:partials/_footer.php -->
         <footer class="footer">
           <div class="d-sm-flex justify-content-center justify-content-sm-between">
             <span class="text-muted text-center text-sm-left d-block d-sm-inline-block">Copyright © 2025.  Pharmers academy. All rights reserved.</span>
@@ -387,6 +397,18 @@
   <script src="js/dashboard.js"></script>
   <script src="js/Chart.roundedBarCharts.js"></script>
   <!-- End custom js for this page-->
+  <script>
+    // Function to get today's date in "DD MMM YYYY" format
+    function getFormattedDate() {
+        const today = new Date();
+        const options = { day: '2-digit', month: 'short', year: 'numeric' };
+        return today.toLocaleDateString('en-GB', options);
+    }
+
+    // Set today's date in the span
+    document.getElementById('currentDate').textContent = getFormattedDate();
+</script>
+  <script src="../script.js"></script>
 </body>
 
 </html>

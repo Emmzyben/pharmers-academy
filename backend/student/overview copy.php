@@ -5,7 +5,7 @@
   <!-- Required meta tags -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  <title>User Details</title>
+  <title>Student dashboard</title>
   <!-- plugins:css -->
   <link rel="stylesheet" href="vendors/feather/feather.css">
   <link rel="stylesheet" href="vendors/ti-icons/css/themify-icons.css">
@@ -95,7 +95,7 @@
           <li class="nav-item">
             <a class="nav-link"   href="students.php" aria-expanded="false" aria-controls="ui-basic">
               <i class="icon-layout menu-icon"></i>
-              <span class="menu-title">Students</span>
+              <span class="menu-title">Assignment</span>
               <i class="menu-arrow"></i>
             </a>
            
@@ -103,14 +103,14 @@
           <li class="nav-item">
             <a class="nav-link"   href="instructor.php" aria-expanded="false" aria-controls="form-elements">
               <i class="icon-columns menu-icon"></i>
-              <span class="menu-title">Instructors</span>
+              <span class="menu-title">Quiz</span>
               <i class="menu-arrow"></i>
             </a>
           </li>
           <li class="nav-item">
             <a class="nav-link"   href="courses.php" aria-expanded="false" aria-controls="charts">
               <i class="icon-bar-graph menu-icon"></i>
-              <span class="menu-title">Courses</span>
+              <span class="menu-title">Result</span>
               <i class="menu-arrow"></i>
             </a>
           </li>
@@ -139,68 +139,124 @@
             <div class="col-md-12 grid-margin">
               <div class="row">
                 <div class="col-12 col-xl-8 mb-4 mb-xl-0">
-                  <h3 class="font-weight-bold">User Details</h3>
-                  <h6 class="font-weight-normal mb-0">View/Edit User</h6>
+                  <h3 class="font-weight-bold">Welcome User</h3>
+                  <h6 class="font-weight-normal mb-0">Lets get started learning!</h6>
                 </div>
                
               </div>
             </div>
           </div>
-          <div class="card">
-                <div class="card-body">
-                  <form class="form-sample">
-                    
-                    <div class="row">
-                    <div class="col-md-6">
-                        <div class="form-group row">
-                          <div class="col-sm-9">
-                           <img src="img/carousel-1.jpg" alt="" width="200px" style="border-radius:10px">
-                          </div>
-                        </div>
-                        <p>Full Name:Emmanuel Amadi</p>
-                           <p>Role: Admin</p>
+          <div class="row">
+            <div class="col-md-6 grid-margin stretch-card">
+              <div class="card tale-bg">
+                <div class="card-people mt-auto">
+                  <img src="images/dashboard/people.svg" alt="people">
+                  <div class="weather-info">
+                    <div class="d-flex">
+                      <div>
+                        <h2 class="mb-0 font-weight-normal"><i class="icon-sun mr-2"></i>31<sup>C</sup></h2>
                       </div>
-
-                      <div class="form-group">
-                      <label>Change Display Image</label>
-                      <input type="file" name="img[]" class="file-upload-default">
-                      <div class="input-group col-xs-12">
-                        <input type="text" class="form-control file-upload-info" disabled placeholder="Upload Image">
-                        <span class="input-group-append">
-                          <button class="file-upload-browse btn btn-primary" type="button">Upload</button>
-                        </span>
+                      <div class="ml-2">
+                        <h4 class="location font-weight-normal">Bangalore</h4>
+                        <h6 class="font-weight-normal">India</h6>
                       </div>
                     </div>
-
-                    </div>
-                    
-                  </form>
-                 
-                </div>
-              </div>
-              <br>
-          <div class="col-12 grid-margin stretch-card">
-              <div class="card">
-                <div class="card-body">
-                  <form class="forms-sample">
-                    <div class="form-group">
-                      <label for="exampleInputEmail3">Username</label>
-                      <input type="text" class="form-control" id="exampleInputEmail3" placeholder="Email">
-                    </div>
-                    <div class="form-group">
-                      <label for="exampleInputPassword4">Password</label>
-                      <input type="password" class="form-control" id="exampleInputPassword4" placeholder="Password">
-                    </div>
-                    
-                   
-                    <button type="submit" class="btn btn-primary mr-2">Update User</button>
-                    <button type="submit" class="btn btn-danger mr-2">Delete User</button>
-                  </form>
+                  </div>
                 </div>
               </div>
             </div>
-       </div>
-       
+            <div class="col-md-6 grid-margin transparent">
+              <div class="row">
+                <div class="col-md-6 mb-4 stretch-card transparent">
+                  <div class="card card-tale">
+                    <div class="card-body">
+                      <p class="mb-4">Enrolled Courses</p>
+                      <p class="fs-30 mb-2">1</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-md-6 mb-4 stretch-card transparent">
+                  <div class="card card-dark-blue">
+                    <div class="card-body">
+                      <p class="mb-4">Assignments Due</p>
+                      <p class="fs-30 mb-2">3</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-md-6 mb-4 stretch-card transparent">
+                  <div class="card card-light-blue">
+                    <div class="card-body">
+                      <p class="mb-4">Quizez Due</p>
+                      <p class="fs-30 mb-2">3</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-md-6 mb-4 stretch-card transparent">
+                  <div class="card card-light-danger">
+                    <div class="card-body">
+                      <p class="mb-4">Notifications</p>
+                      <p class="fs-30 mb-2">47</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+             
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-12 grid-margin stretch-card">
+              <div class="card">
+                <div class="card-body">
+                  <p class="card-title mb-0">Top Products</p>
+                  <div class="table-responsive">
+                    <table class="table table-striped table-borderless">
+                      <thead>
+                        <tr>
+                          <th>Course</th>
+                          <th>Status</th>
+                          <th>Action</th>
+                        </tr>  
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>Search Engine Marketing</td>
+                          <td class="font-weight-medium"><div class="badge badge-success">Completed</div></td>
+                          <td><a href=""><button class="btn btn-inverse-primary">Open Course</button></a></td>
+                        </tr>
+                       
+                        <tr>
+                          <td>Referral Marketing</td>
+                          <td class="font-weight-medium"><div class="badge badge-warning">Pending</div></td>
+                          <td><a href=""><button class="btn btn-inverse-primary">Open Course</button></a></td>
+                        </tr>
+                        <tr>
+                          <td>Social media marketing</td>
+                          <td class="font-weight-medium"><div class="badge badge-info">In Progress</div></td>
+                          <td><a href=""><button class="btn btn-inverse-primary">Open Course</button></a></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+    
+         
+      
+         
+        <!-- content-wrapper ends -->
+        <!-- partial:partials/_footer.html -->
+        <footer class="footer">
+          <div class="d-sm-flex justify-content-center justify-content-sm-between">
+            <span class="text-muted text-center text-sm-left d-block d-sm-inline-block">Copyright © 2025.  Pharmers academy. All rights reserved.</span>
+         </div>
+          <div class="d-sm-flex justify-content-center justify-content-sm-between">
+            <span class="text-muted text-center text-sm-left d-block d-sm-inline-block">Developed by <a href="" target="_blank">Argon tech</a></span> 
+          </div>
+        </footer> 
+        <!-- partial -->
+      </div>
       <!-- main-panel ends -->
     </div>   
     <!-- page-body-wrapper ends -->

@@ -1,5 +1,11 @@
 <?php
 session_start();
+require_once '../backend/database/db_config.php';
+
+$query = "SELECT id, course_name, price FROM courses";
+$result = $conn->query($query);
+
+
 if (isset($_SESSION['message'])) {
     $message = $_SESSION['message'];
     $messageType = $_SESSION['messageType'];
@@ -57,6 +63,7 @@ if (isset($_SESSION['message'])) {
 
     input[type="text"],
     input[type="email"],
+    input[type="password"],
     textarea {
       width: 100%;
       padding: 10px;
@@ -176,6 +183,11 @@ if (!empty($message)) {
       </div>
 
       <div>
+        <label for="degree">License:</label>
+        <input type="text" id="license" name="license">
+      </div>
+
+      <div>
         <label for="enrolment-number">Returning Learner Enrolment Number:</label>
         <input type="text" id="enrolment-number" name="return_number">
       </div>
@@ -185,15 +197,46 @@ if (!empty($message)) {
         <input type="text" id="username" name="username">
       </div>
 
-       <div>
-        <label for="password">Password:</label>
-        <input type="text" id="" name="password">
-      </div>
+      <div>
+  <label for="password">Password:</label>
+  <div style="position: relative;">
+    <input type="password" id="password" name="password">
+    <span id="togglePassword" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer;">
+      👁️
+    </span>
+  </div>
+</div>
+
+<div>
+  <label for="confirmPassword">Confirm Password:</label>
+  <div style="position: relative;">
+    <input type="password" id="confirmPassword">
+    <span id="toggleConfirmPassword" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer;">
+      👁️
+    </span>
+  </div>
+  <p id="passwordMatchMessage" style="color: red; display: none;">Passwords do not match!</p>
+</div>
 
       <div style="grid-column: 1 / -1;">
-        <label for="course-selection">Course Selection:</label>
-        <textarea id="course-selection" name="course" rows="4" placeholder="List your selected courses here..."></textarea>
-      </div>
+    <label for="course-selection">Course Selection (Max: 3):</label>
+    
+    <div id="course-list">
+        <?php while ($row = $result->fetch_assoc()): ?>
+            <label>
+                <input type="checkbox" name="selected_courses[]" value="<?php echo $row['id'] . '|' . $row['price']; ?>" onchange="updateCourseSelection(this)">
+                <?php echo htmlspecialchars($row['course_name']) . " - RS" . number_format($row['price'], 2); ?>
+            </label><br>
+        <?php endwhile; ?>
+    </div>
+
+    <textarea id="course-selection" rows="4" readonly placeholder="Selected courses will appear here..."></textarea>
+
+    <input type="hidden" id="total-price" name="total_price" value="0">
+    <p><strong>Total Price:</strong>ZAR<span id="total-price-display">0.00</span></p>
+</div>
+
+
     </div>
 
     <div class="form-check">
@@ -209,7 +252,7 @@ if (!empty($message)) {
       <p>Already have an account? <a href="login.php" class="text-primary">Login</a></p>
     </div>
     <div class="text-center mt-4 font-weight-light">
-                 <a href="../index.html" class="text-primary">Go back home</a>
+                 <a href="../index.php" class="text-primary">Go back home</a>
                 </div>
   
             </div>
@@ -220,6 +263,30 @@ if (!empty($message)) {
     </div>
     <!-- page-body-wrapper ends -->
   </div>
+  <script>
+function updateCourseSelection(checkbox) {
+    let selectedCourses = document.querySelectorAll('input[name="selected_courses[]"]:checked');
+
+    if (selectedCourses.length > 3) {
+        alert("You can only select up to 3 courses.");
+        checkbox.checked = false;
+        return;
+    }
+
+    let selectedNames = [];
+    let totalPrice = 0;
+
+    selectedCourses.forEach(cb => {
+        let [courseId, price] = cb.value.split('|');
+        selectedNames.push(cb.parentElement.innerText);
+        totalPrice += parseFloat(price);
+    });
+
+    document.getElementById("course-selection").value = selectedNames.join("\n");
+    document.getElementById("total-price").value = totalPrice;
+    document.getElementById("total-price-display").innerText = totalPrice.toFixed(2);
+}
+</script>
   <!-- container-scroller -->
   <!-- plugins:js -->
   <script src="./vendors/js/vendor.bundle.base.js"></script>
@@ -234,6 +301,49 @@ if (!empty($message)) {
   <script src="./js/todolist.js"></script>
   <script src="script.js"></script>
   <!-- endinject -->
+  <script>
+  // Toggle Password Visibility
+  function toggleVisibility(inputId, toggleId) {
+    document.getElementById(toggleId).addEventListener("click", function () {
+      const input = document.getElementById(inputId);
+      if (input.type === "password") {
+        input.type = "text";
+        this.innerText = "👁️‍🗨️"; // Change icon when password is visible
+      } else {
+        input.type = "password";
+        this.innerText = "👁️";
+      }
+    });
+  }
+
+  toggleVisibility("password", "togglePassword");
+  toggleVisibility("confirmPassword", "toggleConfirmPassword");
+
+  // Real-time Password Match Validation
+  document.getElementById("password").addEventListener("input", checkPasswordMatch);
+  document.getElementById("confirmPassword").addEventListener("input", checkPasswordMatch);
+
+  function checkPasswordMatch() {
+    const password = document.getElementById("password").value;
+    const confirmPassword = document.getElementById("confirmPassword").value;
+    const message = document.getElementById("passwordMatchMessage");
+
+    if (password === confirmPassword) {
+      message.style.color = "green";
+      message.innerText = "Passwords match!";
+      message.style.display = "block";
+    } else {
+      message.style.color = "red";
+      message.innerText = "Passwords do not match!";
+      message.style.display = "block";
+    }
+
+    if (confirmPassword === "") {
+      message.style.display = "none"; // Hide message if confirm password is empty
+    }
+  }
+</script>
+
 </body>
 
 </html>

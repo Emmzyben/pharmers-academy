@@ -1,6 +1,26 @@
 <?php
 session_start();
-include '../database/db_config.php';
+if (!isset($_SESSION['user_id'])) {
+  header("Location: logout.php"); 
+  exit;
+}
+
+
+include '../database/db_config.php'; 
+$userId = $_SESSION['user_id'];
+$query = "SELECT * FROM users WHERE id = ?";
+$stmt = $conn->prepare($query);
+$stmt->bind_param("i", $userId);
+$stmt->execute();
+$result = $stmt->get_result();
+$user = $result->fetch_assoc();
+
+if (!$user) {
+  $_SESSION['message'] = "User not found.";
+                $_SESSION['messageType'] = "error";
+}
+$stmt->close();
+
 
 // Enable error reporting for debugging
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
@@ -15,10 +35,10 @@ $admin2 = [];
 
 if ($id) {
     // Fetch student details
-    $stmt = $conn->prepare("SELECT id, title, firstName, lastName, company, contact, location, degree, enrolment_number, profile_picture FROM students WHERE id=?");
+    $stmt = $conn->prepare("SELECT id, title, firstName, lastName, company, contact, location, degree, enrolment_number,license, profile_picture FROM students WHERE id=?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
-    $stmt->bind_result($admin_id, $admin_title, $admin_firstName, $admin_lastName, $admin_company, $admin_contact, $admin_location, $admin_degree, $admin_enrolment_number, $admin_profilePicture);
+    $stmt->bind_result($admin_id, $admin_title, $admin_firstName, $admin_lastName, $admin_company, $admin_contact, $admin_location, $admin_degree, $admin_enrolment_number, $admin_license, $admin_profilePicture);
 
     if ($stmt->fetch()) {
         $admin = [
@@ -31,7 +51,8 @@ if ($id) {
             'location' => $admin_location,
             'degree' => $admin_degree,
             'enrolment_number' => $admin_enrolment_number,
-            'profile_picture' => $admin_profilePicture
+            'profile_picture' => $admin_profilePicture,
+            'license' => $admin_license
         ];
     }
     $stmt->close();
@@ -66,6 +87,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $contact = $_POST['contact'] ?? '';
     $location = $_POST['location'] ?? '';
     $degree = $_POST['degree'] ?? '';
+    $license = $_POST['license'] ?? '';
     $username = $_POST['username'] ?? '';
     $password = $_POST['password'] ?? '';
 
@@ -112,8 +134,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 
     // Update student details
-    $stmt = $conn->prepare("UPDATE students SET title=?, firstname=?, lastname=?, company=?, contact=?, location=?, degree=? WHERE id=?");
-    $stmt->bind_param("sssssssi", $participant_title, $firstName, $lastName, $company, $contact, $location, $degree, $id);
+    $stmt = $conn->prepare("UPDATE students SET title=?, firstname=?, lastname=?, company=?, contact=?, location=?, degree=?,license=? WHERE id=?");
+    $stmt->bind_param("ssssssssi", $participant_title, $firstName, $lastName, $company, $contact, $location, $degree,$license, $id);
 
     if (!$stmt->execute()) {
         setSessionMessage("Error updating student record: " . $stmt->error, "error");
@@ -186,11 +208,11 @@ if (isset($_SESSION['message'])) {
 </head>
 <body>
   <div class="container-scroller">
-    <!-- partial:partials/_navbar.html -->
+    <!-- partial:partials/_navbar.php -->
     <nav class="navbar col-lg-12 col-12 p-0 fixed-top d-flex flex-row">
       <div class="text-center navbar-brand-wrapper d-flex align-items-center justify-content-center">
-        <a class="navbar-brand brand-logo mr-5" href="index.html"><img src="img/logo.jpg" class="mr-2" alt="logo"/></a>
-        <a class="navbar-brand brand-logo-mini" href="index.html"><img src="img/logo.jpg"  alt="logo" style="width:400px"/></a>
+        <a class="navbar-brand brand-logo mr-5" href="index.php"><img src="img/logo.jpg" class="mr-2" alt="logo"/></a>
+        <a class="navbar-brand brand-logo-mini" href="index.php"><img src="img/logo.jpg"  alt="logo" style="width:400px"/></a>
       </div>
       <div class="navbar-menu-wrapper d-flex align-items-center justify-content-end">
         <button class="navbar-toggler navbar-toggler align-self-center" type="button" data-toggle="minimize">
@@ -203,10 +225,10 @@ if (isset($_SESSION['message'])) {
           
           <li class="nav-item nav-profile dropdown">
             <a class="nav-link dropdown-toggle" href="#" data-toggle="dropdown" id="profileDropdown">
-              <img src="images/faces/face28.jpg" alt="profile"/>
+              <img src="<?php echo htmlspecialchars($user['profile_picture']); ?>" alt="image">
             </a>
             <div class="dropdown-menu dropdown-menu-right navbar-dropdown" aria-labelledby="profileDropdown">
-              <a class="dropdown-item">
+              <a class="dropdown-item" href="settings.php">
                 <i class="ti-settings text-primary"></i>
                 Settings
               </a>
@@ -225,7 +247,7 @@ if (isset($_SESSION['message'])) {
     </nav>
     <!-- partial -->
     <div class="container-fluid page-body-wrapper">
-      <!-- partial:partials/_settings-panel.html -->
+      <!-- partial:partials/_settings-panel.php -->
       <div class="theme-setting-wrapper">
         <div id="settings-trigger"><i class="ti-settings"></i></div>
         <div id="theme-settings" class="settings-panel">
@@ -246,7 +268,7 @@ if (isset($_SESSION['message'])) {
       </div>
     
       <!-- partial -->
-      <!-- partial:partials/_sidebar.html -->
+      <!-- partial:partials/_sidebar.php -->
       <nav class="sidebar sidebar-offcanvas" id="sidebar">
         <ul class="nav">
           <li class="nav-item">
@@ -323,7 +345,6 @@ if (isset($_SESSION['message'])) {
               <div class="card">
                 <div class="card-body">
                   <form class="form-sample">
-                    
                     <div class="row">
                     <div class="col-md-6">
                         <div class="form-group row">
@@ -336,19 +357,12 @@ if (isset($_SESSION['message'])) {
                           </div>
                         </div>
                       </div>
-
-                     
-
-
-
-
-
                     </div>
-                    
                   </form>
                  
                 </div>
               </div>
+
               <br>
               <div class="card">
                 <div class="card-body">
@@ -359,7 +373,7 @@ if (isset($_SESSION['message'])) {
                 <label class="col-sm-3 col-form-label">Participant Title</label>
                 <div class="col-sm-9">
                     <input type="text" name='title' class="form-control" value="<?php echo htmlspecialchars($admin['title']); ?>">
-                </div>
+             </div>
             </div>
         </div>
         <div class="col-md-6">
@@ -367,9 +381,10 @@ if (isset($_SESSION['message'])) {
                 <label class="col-sm-3 col-form-label">First Name</label>
                 <div class="col-sm-9">
                 <input type="text" name='firstName' class="form-control" value="<?php echo htmlspecialchars($admin['firstName']); ?>">
-               
             </div>
+
         </div>
+    </div>
         <div class="col-md-6">
             <div class="form-group row">
                 <label class="col-sm-3 col-form-label">Last Name</label>
@@ -421,6 +436,14 @@ if (isset($_SESSION['message'])) {
                 <label class="col-sm-3 col-form-label">Degree/Qualification</label>
                 <div class="col-sm-9">
                     <input type="text" name='degree' class="form-control" value="<?php echo htmlspecialchars($admin['degree']); ?>">
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="form-group row">
+                <label class="col-sm-3 col-form-label">License</label>
+                <div class="col-sm-9">
+                    <input type="text" name='license' class="form-control" value="<?php echo htmlspecialchars($admin['license']); ?>">
                 </div>
             </div>
         </div>
@@ -490,7 +513,7 @@ if (isset($_SESSION['message'])) {
 </script>
          
         <!-- content-wrapper ends -->
-        <!-- partial:partials/_footer.html -->
+        <!-- partial:partials/_footer.php -->
         <footer class="footer">
           <div class="d-sm-flex justify-content-center justify-content-sm-between">
             <span class="text-muted text-center text-sm-left d-block d-sm-inline-block">Copyright © 2025.  Pharmers academy. All rights reserved.</span>

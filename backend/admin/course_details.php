@@ -1,6 +1,26 @@
 <?php
 session_start();
-require '../database/db_config.php';
+if (!isset($_SESSION['user_id'])) {
+  header("Location: logout.php"); 
+  exit;
+}
+
+
+include '../database/db_config.php'; 
+$userId = $_SESSION['user_id'];
+$query = "SELECT * FROM users WHERE id = ?";
+$stmt = $conn->prepare($query);
+$stmt->bind_param("i", $userId);
+$stmt->execute();
+$result = $stmt->get_result();
+$user = $result->fetch_assoc();
+
+if (!$user) {
+  $_SESSION['message'] = "User not found.";
+                $_SESSION['messageType'] = "error";
+}
+$stmt->close();
+
 
 if (!isset($_GET['id']) || empty($_GET['id'])) {
     $_SESSION['message'] = "Invalid Course ID.";
@@ -11,9 +31,8 @@ if (!isset($_GET['id']) || empty($_GET['id'])) {
 
 $courseId = intval($_GET['id']); // Convert to integer for safety
 
-// Fetch Course Details
-$stmt = $conn->prepare("SELECT course_name FROM courses WHERE id = ?");
-$stmt->bind_param("i", $courseId); // Bind the courseId to the query
+$stmt = $conn->prepare("SELECT course_name,description, price FROM courses WHERE id = ?");
+$stmt->bind_param("i", $courseId);
 $stmt->execute();
 $result = $stmt->get_result();
 $course = $result->fetch_assoc();
@@ -21,10 +40,9 @@ $course = $result->fetch_assoc();
 if (!$course) {
     $_SESSION['message'] = "Course not found.";
     $_SESSION['messageType'] = "error";
-    header("Location: courses.php"); // Redirect back if course is not found
+    header("Location: courses.php");
     exit();
 }
-
 // Fetch Course Modules
 $stmt = $conn->prepare("SELECT module_title FROM modules WHERE course_id = ?");
 $stmt->bind_param("i", $courseId); // Bind the courseId to the query
@@ -64,6 +82,23 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["delete_course"])) {
     }
 }
 
+
+$enrolledQuery = "
+    SELECT s.firstName, s.lastName, s.enrolment_number, s.created_at
+    FROM students s
+    JOIN user_courses uc ON s.id = uc.user_id
+    WHERE uc.course_id = ?
+    ORDER BY s.created_at DESC";
+
+$stmt = $conn->prepare($enrolledQuery);
+$stmt->bind_param("i", $courseId);
+$stmt->execute();
+$enrolledResult = $stmt->get_result();
+
+$enrolledStudents = [];
+while ($row = $enrolledResult->fetch_assoc()) {
+    $enrolledStudents[] = $row;
+}
 if (isset($_SESSION['message'])) {
     $message = $_SESSION['message'];
     $messageType = $_SESSION['messageType'];
@@ -98,11 +133,11 @@ if (isset($_SESSION['message'])) {
 </head>
 <body>
   <div class="container-scroller">
-    <!-- partial:partials/_navbar.html -->
+    <!-- partial:partials/_navbar.php -->
     <nav class="navbar col-lg-12 col-12 p-0 fixed-top d-flex flex-row">
       <div class="text-center navbar-brand-wrapper d-flex align-items-center justify-content-center">
-        <a class="navbar-brand brand-logo mr-5" href="index.html"><img src="img/logo.jpg" class="mr-2" alt="logo"/></a>
-        <a class="navbar-brand brand-logo-mini" href="index.html"><img src="img/logo.jpg"  alt="logo" style="width:400px"/></a>
+        <a class="navbar-brand brand-logo mr-5" href="index.php"><img src="img/logo.jpg" class="mr-2" alt="logo"/></a>
+        <a class="navbar-brand brand-logo-mini" href="index.php"><img src="img/logo.jpg"  alt="logo" style="width:400px"/></a>
       </div>
       <div class="navbar-menu-wrapper d-flex align-items-center justify-content-end">
         <button class="navbar-toggler navbar-toggler align-self-center" type="button" data-toggle="minimize">
@@ -115,10 +150,10 @@ if (isset($_SESSION['message'])) {
           
           <li class="nav-item nav-profile dropdown">
             <a class="nav-link dropdown-toggle" href="#" data-toggle="dropdown" id="profileDropdown">
-              <img src="images/faces/face28.jpg" alt="profile"/>
+              <img src="<?php echo htmlspecialchars($user['profile_picture']); ?>" alt="image">
             </a>
             <div class="dropdown-menu dropdown-menu-right navbar-dropdown" aria-labelledby="profileDropdown">
-              <a class="dropdown-item">
+              <a class="dropdown-item" href="settings.php">
                 <i class="ti-settings text-primary"></i>
                 Settings
               </a>
@@ -137,7 +172,7 @@ if (isset($_SESSION['message'])) {
     </nav>
     <!-- partial -->
     <div class="container-fluid page-body-wrapper">
-      <!-- partial:partials/_settings-panel.html -->
+      <!-- partial:partials/_settings-panel.php -->
       <div class="theme-setting-wrapper">
         <div id="settings-trigger"><i class="ti-settings"></i></div>
         <div id="theme-settings" class="settings-panel">
@@ -158,7 +193,7 @@ if (isset($_SESSION['message'])) {
       </div>
     
       <!-- partial -->
-      <!-- partial:partials/_sidebar.html -->
+      <!-- partial:partials/_sidebar.php -->
       <nav class="sidebar sidebar-offcanvas" id="sidebar">
         <ul class="nav">
           <li class="nav-item">
@@ -224,6 +259,8 @@ if (isset($_SESSION['message'])) {
               <div class="card">
               <div class="card-body">
     <h4><b>Course:</b> <?= htmlspecialchars($course['course_name'], ENT_QUOTES, 'UTF-8') ?></h4>
+    <p><b>Course price:</b>R<?= htmlspecialchars($course['price'], ENT_QUOTES, 'UTF-8') ?></p>
+    <p><b>Course description:</b> <?= htmlspecialchars($course['description'], ENT_QUOTES, 'UTF-8') ?></p>
     <p><b>Course modules:</b></p>
     <ul class="list-ticked">
         <?php if (!empty($modules)): ?>
@@ -255,60 +292,40 @@ if (isset($_SESSION['message'])) {
 
             <br>
             <div class="row">
-            <div class="col-md-12 grid-margin stretch-card">
-              <div class="card">
-                <div class="card-body">
-                  <p class="card-title">Students currently enrolled</p>
-                  <div class="row">
+    <div class="col-md-12 grid-margin stretch-card">
+        <div class="card">
+            <div class="card-body">
+                <p class="card-title">Enrolled Students</p>
+                <div class="row">
                     <div class="col-12">
-                      <div class="table-responsive">
-                        <table id="example" class="display expandable-table" style="width:100%">
-                          <thead>
-                            <tr>
-                              <th>Student name</th>
-                              <th>Admission number</th>
-                              <th>Registration date</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                        <tr>
-                          <td>Emmzy ben</td>
-                          <td class="font-weight-bold">PHA-234567</td>
-                         
-                          <td>21 Sep 2018</td>
-                      </tr>
-                      <tr>
-                          <td>Emmzy ben</td>
-                          <td class="font-weight-bold">PHA-234567</td>
-                         
-                          <td>21 Sep 2018</td>
-                      </tr>
-                      <tr>
-                          <td>Emmzy ben</td>
-                          <td class="font-weight-bold">PHA-234567</td>
-                         
-                          <td>21 Sep 2018</td>
-                      </tr>
-                      <tr>
-                          <td>Emmzy ben</td>
-                          <td class="font-weight-bold">PHA-234567</td>
-                         
-                          <td>21 Sep 2018</td>
-                      </tr>
-                      </tbody>
-                      </table>
-                      </div>
+                        <div class="table-responsive">
+                            <table id="example" class="display expandable-table" style="width:100%">
+                                <thead>
+                                    <tr>
+                                        <th>Student Name</th>
+                                        <th>Admission Number</th>
+                                        <th>Enrollment Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($enrolledStudents as $student): ?>
+                                        <tr>
+                                            <td><?= htmlspecialchars($student['firstName'] . ' ' . $student['lastName']); ?></td>
+                                            <td class="font-weight-bold"><?= htmlspecialchars($student['enrolment_number']); ?></td>
+                                           <td><?= date("d M Y", strtotime($student['created_at'])); ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                  </div>
-                  </div>
                 </div>
-
-                
-              </div>
             </div>
         </div>
+    </div>
+</div>
         <!-- content-wrapper ends -->
-        <!-- partial:partials/_footer.html -->
+        <!-- partial:partials/_footer.php -->
         <footer class="footer">
           <div class="d-sm-flex justify-content-center justify-content-sm-between">
             <span class="text-muted text-center text-sm-left d-block d-sm-inline-block">Copyright © 2025.  Pharmers academy. All rights reserved.</span>

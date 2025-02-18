@@ -1,13 +1,12 @@
 <?php
 session_start();
+require_once '../backend/database/db_config.php';
 
 $message = '';
 
 function generateAdmissionNumber() {
     return 'PHAD-' . strtoupper(bin2hex(random_bytes(4)));
 }
-
-include './database/db_config.php';
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $participant_title = $_POST['title'] ?? '';
@@ -18,16 +17,32 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $contact = $_POST['contact'] ?? '';
     $location = $_POST['location'] ?? '';
     $degree = $_POST['degree'] ?? '';
+    $license = $_POST['license'] ?? '';
     $return_number = $_POST['return_number'] ?? '';
     $username = $_POST['username'] ?? '';
     $password = $_POST['password'] ?? '';
-    $course = $_POST['course'] ?? '';
-    $role = 'student'; // Assuming 'student' as default role
+    $role = 'student';
+    $status = 'inactive';
     $full_name = trim("$firstName $lastName");
 
-    // Validate required fields
-    if (empty($firstName) || empty($lastName) || empty($email) || empty($contact) || empty($degree) || empty($course) || empty($username) || empty($password)) {
-        $_SESSION['message'] = "Please fill in all required fields.";
+    // Ensure selected courses are properly received
+    $selected_courses = $_POST['selected_courses'] ?? [];
+    $total_price = ($_POST['total_price'] ?? 0.0);
+
+    // If return_number is empty, add 500 to total_price
+    if (empty($return_number)) {
+        $total_price += 500;
+    }
+
+    if (!is_array($selected_courses) || empty($selected_courses)) {
+        $_SESSION['message'] = "Please select at least one course.";
+        $_SESSION['messageType'] = "error";
+        header("Location: register.php");
+        exit();
+    }
+
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $_SESSION['message'] = "Invalid email format.";
         $_SESSION['messageType'] = "error";
         header("Location: register.php");
         exit();
@@ -35,68 +50,61 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
 
-    // Check if username already exists
-    $stmt = $conn->prepare("SELECT id FROM users WHERE username = ?");
-    $stmt->bind_param("s", $username);
-    $stmt->execute();
-    $stmt->store_result();
-    if ($stmt->num_rows > 0) {
-        $_SESSION['message'] = "Username already exists.";
-        $_SESSION['messageType'] = "error";
-        $stmt->close();
-        $conn->close();
-        header("Location: register.php");
-        exit();
-    }
-    $stmt->close();
+    // Start transaction
+    $conn->begin_transaction();
 
-    $admissionNumber = generateAdmissionNumber();
-
-    // Insert into `users`
-    $stmt = $conn->prepare("INSERT INTO users (full_name, email, username, password, role) VALUES (?, ?, ?, ?, ?)");
-    if ($stmt) {
-        $stmt->bind_param("sssss", $full_name, $email, $username, $hashedPassword, $role);
-        if ($stmt->execute()) {
-            $userId = $stmt->insert_id;
-
-            // Insert into `students`
-            $stmt2 = $conn->prepare("INSERT INTO students (id, title, firstName, lastName, company, contact, location, degree, return_number, course, enrolment_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            if ($stmt2) {
-                $stmt2->bind_param("issssssssss", $userId, $participant_title, $firstName, $lastName, $company, $contact, $location, $degree, $return_number, $course, $admissionNumber);
-                if ($stmt2->execute()) {
-                    $_SESSION['message'] = "Registration successful.";
-                    $_SESSION['messageType'] = "success";
-                } else {
-                    // Rollback by deleting user if student registration fails
-                    $conn->query("DELETE FROM users WHERE id = $userId");
-                    $_SESSION['message'] = "Error inserting student record: " . $stmt2->error;
-                    $_SESSION['messageType'] = "error";
-                }
-                $stmt2->close();
-            } else {
-                $conn->query("DELETE FROM users WHERE id = $userId");
-                $_SESSION['message'] = "Error preparing student statement: " . $conn->error;
-                $_SESSION['messageType'] = "error";
-            }
-        } else {
-            $_SESSION['message'] = "Error inserting user record: " . $stmt->error;
-            $_SESSION['messageType'] = "error";
+    try {
+        $stmt = $conn->prepare("SELECT id FROM users WHERE (email = ? OR username = ?) AND status = 'active'");
+        $stmt->bind_param("ss", $email, $username); // Ensure correct order
+        $stmt->execute();
+        $stmt->store_result();
+        if ($stmt->num_rows > 0) {
+            throw new Exception("Email or Username already exists.");
         }
         $stmt->close();
-    } else {
-        $_SESSION['message'] = "Error preparing user statement: " . $conn->error;
+        
+
+        $admissionNumber = generateAdmissionNumber();
+
+        // Insert into `users`
+        $stmt = $conn->prepare("INSERT INTO users (full_name, email, username, password, role, status) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("ssssss", $full_name, $email, $username, $hashedPassword, $role, $status);
+        $stmt->execute();
+        $userId = $stmt->insert_id;
+        $stmt->close();
+
+        // Insert into `students`
+        $stmt = $conn->prepare("INSERT INTO students (id, title, firstName, lastName, company, contact, location, degree, return_number, enrolment_number, license) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("issssssssss", $userId, $participant_title, $firstName, $lastName, $company, $contact, $location, $degree, $return_number, $admissionNumber, $license);
+        $stmt->execute();
+        $stmt->close();
+
+        // Insert selected courses into `user_courses`
+        $stmt = $conn->prepare("INSERT INTO user_courses (user_id, course_id, course_price) VALUES (?, ?, ?)");
+        foreach ($selected_courses as $course) {
+            $courseData = explode('|', $course);
+            if (count($courseData) !== 2) {
+                throw new Exception("Invalid course data.");
+            }
+            list($course_id, $course_price) = $courseData;
+            $course_id = intval($course_id);
+            $course_price = floatval($course_price);
+            $stmt->bind_param("iid", $userId, $course_id, $course_price);
+            $stmt->execute();
+        }
+        $stmt->close();
+
+        // Commit transaction
+        $conn->commit();
+
+    } catch (Exception $e) {
+        $conn->rollback();
+        $_SESSION['message'] = "Error: " . $e->getMessage();
         $_SESSION['messageType'] = "error";
     }
 
     $conn->close();
-    header("Location: student/overview.php");
+    header("Location: create_checkout.php?total_price=$total_price&user_id=$userId&email=$email");
     exit();
-}
-
-if (isset($_SESSION['message'])) {
-    $message = $_SESSION['message'];
-    $messageType = $_SESSION['messageType'];
-    unset($_SESSION['message']);
-    unset($_SESSION['messageType']);
 }
 ?>

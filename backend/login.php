@@ -17,7 +17,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $messageType = "error";
     } else {
         // Check for the user in the database
-        $query = "SELECT * FROM users WHERE email = ? OR username = ?";
+        $query = "SELECT * FROM users WHERE (email = ? OR username = ?) AND status = 'active'";
         $stmt = $conn->prepare($query);
         if ($stmt) {
             $stmt->bind_param("ss", $emailOrUsername, $emailOrUsername);
@@ -45,10 +45,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             header("Location: instructor/overview.php");
                             break;
                         case 'student':
-                            header("Location:student/overview.php");
+                            header("Location: student/overview.php");
                             break;
                         default:
-                            header("Location: ../../login.php");
+                            header("Location: login.php");
                             break;
                     }
                     exit;
@@ -77,7 +77,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     header("Location: login.php");
     exit;
 }
-
 
 // Retrieve and unset messages from the session (if any)
 if (isset($_SESSION['message'])) {
@@ -135,9 +134,14 @@ if (!empty($message)) {
                 <div class="form-group">
                   <input type="text" name="email-username" class="form-control form-control-lg" id="exampleInputEmail1" placeholder="Username or email">
                 </div>
-                <div class="form-group">
-                  <input type="password" name="password" class="form-control form-control-lg" id="exampleInputPassword1" placeholder="Password">
-                </div>
+               <div class="form-group">
+  <div style="position: relative;">
+    <input type="password" name="password" class="form-control form-control-lg" id="exampleInputPassword1" placeholder="Password">
+    <span id="togglePassword" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer;">
+      👁️
+    </span>
+  </div>
+</div>
                 <div class="mt-3">
                   <button type="submit" class="btn btn-block btn-primary btn-lg font-weight-medium auth-form-btn" >SIGN IN</button>
                 </div>
@@ -155,7 +159,7 @@ if (!empty($message)) {
                   Don't have an account? <a href="register.php" class="text-primary">Create</a>
                 </div>
                 <div class="text-center mt-4 font-weight-light">
-                 <a href="../index.html" class="text-primary">Go back home</a>
+                 <a href="../index.php" class="text-primary">Go back home</a>
                 </div>
               </form>
             </div>
@@ -180,6 +184,18 @@ if (!empty($message)) {
   <script src="./js/todolist.js"></script>
   <!-- endinject -->
    <script src="script.js"></script>
+   <script>
+  document.getElementById("togglePassword").addEventListener("click", function () {
+    const passwordInput = document.getElementById("exampleInputPassword1");
+    if (passwordInput.type === "password") {
+      passwordInput.type = "text";
+      this.innerText = "👁️‍🗨️"; // Change icon when password is visible
+    } else {
+      passwordInput.type = "password";
+      this.innerText = "👁️"; // Change icon back when hidden
+    }
+  });
+</script>
 </body>
 
 </html>
